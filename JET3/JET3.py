@@ -3,3 +3,4 @@ from .constants import *
 from .exceptions import *
 from .JET import *
 from .process_JET_table import *
+from .verify import *
