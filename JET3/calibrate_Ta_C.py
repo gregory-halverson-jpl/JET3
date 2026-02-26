@@ -14,6 +14,7 @@ from pathlib import Path
 
 
 def calibrate_Ta_C(
+    Ta_C: np.ndarray,
     NDVI: np.ndarray,
     ST_C: np.ndarray,
     SZA_deg: np.ndarray,
@@ -22,7 +23,6 @@ def calibrate_Ta_C(
     elevation_m: np.ndarray,
     emissivity: np.ndarray,
     wind_speed_mps: np.ndarray,
-    raw_ta_c: np.ndarray,
 ) -> np.ndarray:
     """
     Calibrate air temperature estimates by applying OLS error correction.
@@ -32,6 +32,8 @@ def calibrate_Ta_C(
     
     Parameters
     ----------
+    Ta_C : np.ndarray
+        Air temperature estimates in Celsius to be calibrated
     NDVI : np.ndarray
         Normalized Difference Vegetation Index
     ST_C : np.ndarray
@@ -48,8 +50,6 @@ def calibrate_Ta_C(
         Surface emissivity
     wind_speed_mps : np.ndarray
         Wind speed in meters per second
-    raw_ta_c : np.ndarray
-        Raw air temperature estimates in Celsius
     
     Returns
     -------
@@ -62,19 +62,20 @@ def calibrate_Ta_C(
     >>> from JET3.calibrate_Ta_C import calibrate_Ta_C
     >>> 
     >>> # Example with 10 samples
+    >>> Ta_C = np.array([25.5, 26.2, 27.1, ...])
     >>> NDVI = np.array([0.5, 0.6, 0.7, ...])
     >>> ST_C = np.array([35.2, 36.1, 37.5, ...])
-    >>> # ... provide all 8 predictors and raw_ta_c
+    >>> # ... provide all 8 predictors
     >>> 
     >>> # Calibrate
-    >>> calibrated = calibrate_Ta_C(NDVI, ST_C, SZA_deg, albedo, 
+    >>> calibrated = calibrate_Ta_C(Ta_C, NDVI, ST_C, SZA_deg, albedo, 
     ...                            canopy_height_meters, elevation_m, 
-    ...                            emissivity, wind_speed_mps, raw_ta_c)
+    ...                            emissivity, wind_speed_mps)
     
     Notes
     -----
     - Model Performance: R² = 0.2973, RMSE = 2.1664, MAE = 1.6223
-    - Calibration formula: Ta_C_cal = raw_ta_c - predicted_error
+    - Calibration formula: Ta_C_cal = Ta_C - predicted_error
     - All input arrays must have the same length
     - Input arrays may contain NaN values; output will be NaN at those positions
     - Coefficients were derived from ECOv002 cal/val dataset
@@ -111,22 +112,22 @@ def calibrate_Ta_C(
         'wind_speed_mps': np.asarray(wind_speed_mps),
     }
     
-    raw_ta_c = np.asarray(raw_ta_c)
+    Ta_C = np.asarray(Ta_C)
     
     # Check array lengths match
-    n = len(raw_ta_c)
+    n = len(Ta_C)
     for var_name, arr in predictors.items():
         if len(arr) != n:
             raise ValueError(
                 f"Input array length mismatch: {var_name} has length {len(arr)}, "
-                f"but raw_ta_c has length {n}"
+                f"but Ta_C has length {n}"
             )
     
     # Create mask for valid (non-NaN) values across all inputs
     valid_mask = np.ones(n, dtype=bool)
     for arr in predictors.values():
         valid_mask &= ~np.isnan(arr)
-    valid_mask &= ~np.isnan(raw_ta_c)
+    valid_mask &= ~np.isnan(Ta_C)
     
     # Initialize output with NaN
     calibrated = np.full(n, np.nan, dtype=float)
@@ -145,6 +146,6 @@ def calibrate_Ta_C(
             predicted_error += coef * predictors[var][valid_mask]
         
         # Apply calibration: calibrated = raw - predicted_error
-        calibrated[valid_mask] = raw_ta_c[valid_mask] - predicted_error
+        calibrated[valid_mask] = Ta_C[valid_mask] - predicted_error
     
     return calibrated

@@ -14,6 +14,7 @@ from pathlib import Path
 
 
 def calibrate_SM(
+    SM: np.ndarray,
     NDVI: np.ndarray,
     ST_C: np.ndarray,
     SZA_deg: np.ndarray,
@@ -22,7 +23,6 @@ def calibrate_SM(
     elevation_m: np.ndarray,
     emissivity: np.ndarray,
     wind_speed_mps: np.ndarray,
-    raw_sm: np.ndarray,
 ) -> np.ndarray:
     """
     Calibrate soil moisture estimates by applying OLS error correction.
@@ -32,6 +32,8 @@ def calibrate_SM(
     
     Parameters
     ----------
+    SM : np.ndarray
+        Soil moisture estimates to be calibrated
     NDVI : np.ndarray
         Normalized Difference Vegetation Index
     ST_C : np.ndarray
@@ -48,8 +50,6 @@ def calibrate_SM(
         Surface emissivity
     wind_speed_mps : np.ndarray
         Wind speed in meters per second
-    raw_sm : np.ndarray
-        Raw soil moisture estimates
     
     Returns
     -------
@@ -62,19 +62,20 @@ def calibrate_SM(
     >>> from JET3.calibrate_SM import calibrate_SM
     >>> 
     >>> # Example with 10 samples
+    >>> SM = np.array([0.2, 0.25, 0.3, ...])
     >>> NDVI = np.array([0.5, 0.6, 0.7, ...])
     >>> ST_C = np.array([35.2, 36.1, 37.5, ...])
-    >>> # ... provide all 8 predictors and raw_sm
+    >>> # ... provide all 8 predictors
     >>> 
     >>> # Calibrate
-    >>> calibrated = calibrate_SM(NDVI, ST_C, SZA_deg, albedo, 
+    >>> calibrated = calibrate_SM(SM, NDVI, ST_C, SZA_deg, albedo, 
     ...                           canopy_height_meters, elevation_m, 
-    ...                           emissivity, wind_speed_mps, raw_sm)
+    ...                           emissivity, wind_speed_mps)
     
     Notes
     -----
     - Model Performance: R² = 0.0577, RMSE = 0.0521, MAE = 0.0398
-    - Calibration formula: SM_cal = raw_sm - predicted_error
+    - Calibration formula: SM_cal = SM - predicted_error
     - All input arrays must have the same length
     - Input arrays may contain NaN values; output will be NaN at those positions
     - Coefficients were derived from ECOv002 cal/val dataset
@@ -111,22 +112,22 @@ def calibrate_SM(
         'wind_speed_mps': np.asarray(wind_speed_mps),
     }
     
-    raw_sm = np.asarray(raw_sm)
+    SM = np.asarray(SM)
     
     # Check array lengths match
-    n = len(raw_sm)
+    n = len(SM)
     for var_name, arr in predictors.items():
         if len(arr) != n:
             raise ValueError(
                 f"Input array length mismatch: {var_name} has length {len(arr)}, "
-                f"but raw_sm has length {n}"
+                f"but SM has length {n}"
             )
     
     # Create mask for valid (non-NaN) values across all inputs
     valid_mask = np.ones(n, dtype=bool)
     for arr in predictors.values():
         valid_mask &= ~np.isnan(arr)
-    valid_mask &= ~np.isnan(raw_sm)
+    valid_mask &= ~np.isnan(SM)
     
     # Initialize output with NaN
     calibrated = np.full(n, np.nan, dtype=float)
@@ -145,6 +146,6 @@ def calibrate_SM(
             predicted_error += coef * predictors[var][valid_mask]
         
         # Apply calibration: calibrated = raw - predicted_error
-        calibrated[valid_mask] = raw_sm[valid_mask] - predicted_error
+        calibrated[valid_mask] = SM[valid_mask] - predicted_error
     
     return calibrated
