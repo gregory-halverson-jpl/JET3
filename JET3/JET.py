@@ -27,9 +27,19 @@ from FLiESANN import FLiESANN
 from SEBAL_soil_heat_flux import calculate_SEBAL_soil_heat_flux
 from verma_net_radiation import verma_net_radiation, daylight_Rn_integration_verma
 from check_distribution import check_distribution
+from gedi_canopy_height import load_canopy_height
 
 from .constants import *
 from .exceptions import *
+from .calibrate_SM import calibrate_SM
+from .calibrate_Ta_C import calibrate_Ta_C
+from .calibrate_RH import calibrate_RH
+from .generate_SM_uncalibrated_UQ import generate_SM_uncalibrated_UQ
+from .generate_Ta_C_uncalibrated_UQ import generate_Ta_C_uncalibrated_UQ
+from .generate_RH_uncalibrated_UQ import generate_RH_uncalibrated_UQ
+from .generate_SM_calibrated_UQ import generate_SM_calibrated_UQ
+from .generate_Ta_C_calibrated_UQ import generate_Ta_C_calibrated_UQ
+from .generate_RH_calibrated_UQ import generate_RH_calibrated_UQ
 
 logger = logging.getLogger(__name__)
 
@@ -90,7 +100,9 @@ def JET(
         GEOS5FP_connection: GEOS5FPConnection = None,
         water_mask: Union[Raster, np.ndarray, bool] = None,
         offline_mode: bool = False,
-        include_water_surface: bool = True) -> Dict[str, Union[Raster, np.ndarray]]:
+        include_water_surface: bool = True,
+        generate_UQ: bool = False,
+        use_calibration: bool = False) -> Dict[str, Union[Raster, np.ndarray]]:
     """
     Main science function for JET (JPL Evapotranspiration Ensemble).
     
@@ -183,6 +195,160 @@ def JET(
     # Create GEOS5FP connection if not provided
     if GEOS5FP_connection is None:
         GEOS5FP_connection = GEOS5FPConnection()
+    
+    # Dynamically retrieve missing optional parameters needed for UQ and models
+    if SZA_deg is None:
+        logger.info("retrieving solar zenith angle")
+        SZA_deg = rt.solar_zenith(geometry=geometry, time_UTC=time_UTC)
+    
+    if elevation_m is None:
+        logger.info("retrieving elevation from GEOS-5 FP")
+        elevation_m = GEOS5FP_connection.elevation(geometry=geometry)
+    
+    if wind_speed_mps is None:
+        logger.info("retrieving wind speed from GEOS-5 FP")
+        wind_speed_mps = GEOS5FP_connection.wind_speed(time_UTC=time_UTC, geometry=geometry, resampling=downsampling)
+    
+    if canopy_height_meters is None and GEDI_directory is not None:
+        logger.info("loading canopy height")
+        canopy_height_meters = load_canopy_height(
+            geometry=geometry,
+            source_directory=GEDI_directory,
+            resampling=downsampling
+        )
+    
+    # include optional calibration and UQ generation for air temperature, relative humidity, and soil moisture
+    # Generate uncalibrated UQ if requested (independent of calibration)
+    if generate_UQ:
+        logger.info("generating uncertainty quantification")
+        
+        if Ta_C is not None:
+            logger.info("generating uncalibrated Ta_C UQ")
+            Ta_C_UQ = generate_Ta_C_uncalibrated_UQ(
+                NDVI=NDVI,
+                ST_C=ST_C,
+                SZA_deg=SZA_deg,
+                albedo=albedo,
+                canopy_height_meters=canopy_height_meters,
+                elevation_m=elevation_m,
+                emissivity=emissivity,
+                wind_speed_mps=wind_speed_mps
+            )
+        
+        if RH is not None:
+            logger.info("generating uncalibrated RH UQ")
+            RH_UQ = generate_RH_uncalibrated_UQ(
+                NDVI=NDVI,
+                ST_C=ST_C,
+                SZA_deg=SZA_deg,
+                albedo=albedo,
+                canopy_height_meters=canopy_height_meters,
+                elevation_m=elevation_m,
+                emissivity=emissivity,
+                wind_speed_mps=wind_speed_mps
+            )
+        
+        if soil_moisture is not None:
+            logger.info("generating uncalibrated SM UQ")
+            SM_UQ = generate_SM_uncalibrated_UQ(
+                NDVI=NDVI,
+                ST_C=ST_C,
+                SZA_deg=SZA_deg,
+                albedo=albedo,
+                canopy_height_meters=canopy_height_meters,
+                elevation_m=elevation_m,
+                emissivity=emissivity,
+                wind_speed_mps=wind_speed_mps
+            )
+    
+    # Apply calibration if requested (independent of UQ generation)
+    if use_calibration:
+        logger.info("applying calibration")
+        
+        if Ta_C is not None:
+            logger.info("calibrating Ta_C")
+            Ta_C = calibrate_Ta_C(
+                Ta_C=Ta_C,
+                NDVI=NDVI,
+                ST_C=ST_C,
+                SZA_deg=SZA_deg,
+                albedo=albedo,
+                canopy_height_meters=canopy_height_meters,
+                elevation_m=elevation_m,
+                emissivity=emissivity,
+                wind_speed_mps=wind_speed_mps
+            )
+        
+        if RH is not None:
+            logger.info("calibrating RH")
+            RH = calibrate_RH(
+                RH=RH,
+                NDVI=NDVI,
+                ST_C=ST_C,
+                SZA_deg=SZA_deg,
+                albedo=albedo,
+                canopy_height_meters=canopy_height_meters,
+                elevation_m=elevation_m,
+                emissivity=emissivity,
+                wind_speed_mps=wind_speed_mps
+            )
+        
+        if soil_moisture is not None:
+            logger.info("calibrating soil moisture")
+            soil_moisture = calibrate_SM(
+                SM=soil_moisture,
+                NDVI=NDVI,
+                ST_C=ST_C,
+                SZA_deg=SZA_deg,
+                albedo=albedo,
+                canopy_height_meters=canopy_height_meters,
+                elevation_m=elevation_m,
+                emissivity=emissivity,
+                wind_speed_mps=wind_speed_mps
+            )
+        
+        # Generate calibrated UQ if also generating UQ
+        if generate_UQ:
+            logger.info("generating calibrated UQ")
+            
+            if Ta_C is not None:
+                logger.info("generating calibrated Ta_C UQ")
+                Ta_C_UQ = generate_Ta_C_calibrated_UQ(
+                    NDVI=NDVI,
+                    ST_C=ST_C,
+                    SZA_deg=SZA_deg,
+                    albedo=albedo,
+                    canopy_height_meters=canopy_height_meters,
+                    elevation_m=elevation_m,
+                    emissivity=emissivity,
+                    wind_speed_mps=wind_speed_mps
+                )
+            
+            if RH is not None:
+                logger.info("generating calibrated RH UQ")
+                RH_UQ = generate_RH_calibrated_UQ(
+                    NDVI=NDVI,
+                    ST_C=ST_C,
+                    SZA_deg=SZA_deg,
+                    albedo=albedo,
+                    canopy_height_meters=canopy_height_meters,
+                    elevation_m=elevation_m,
+                    emissivity=emissivity,
+                    wind_speed_mps=wind_speed_mps
+                )
+            
+            if soil_moisture is not None:
+                logger.info("generating calibrated SM UQ")
+                SM_UQ = generate_SM_calibrated_UQ(
+                    NDVI=NDVI,
+                    ST_C=ST_C,
+                    SZA_deg=SZA_deg,
+                    albedo=albedo,
+                    canopy_height_meters=canopy_height_meters,
+                    elevation_m=elevation_m,
+                    emissivity=emissivity,
+                    wind_speed_mps=wind_speed_mps
+                )
     
     # Run FLiES-ANN
     logger.info(f"running Forest Light Environmental Simulator")
@@ -572,11 +738,9 @@ def JET(
         LE_instantaneous_Wm2 = rt.Raster(LE_instantaneous_Wm2, geometry=geometry)
 
     if include_water_surface:
+        # wind_speed_mps should already be retrieved if not in offline_mode
         if wind_speed_mps is None:
-            if offline_mode:
-                raise MissingOfflineParameter("wind_speed_mps must be provided in offline mode")
-            
-            wind_speed_mps = GEOS5FP_connection.wind_speed(time_UTC=time_UTC, geometry=geometry, resampling=downsampling)
+            raise MissingOfflineParameter("wind_speed_mps must be provided in offline mode")
         
         check_distribution(wind_speed_mps, "wind_speed_mps")
         
