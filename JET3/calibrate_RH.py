@@ -8,22 +8,25 @@ derived from validation data.
 The coefficients are stored externally as CSV and loaded at runtime.
 """
 
+from typing import Union
 import numpy as np
 import pandas as pd
 from pathlib import Path
 
+from rasters import Raster
+
 
 def calibrate_RH(
-    RH: np.ndarray,
-    NDVI: np.ndarray,
-    ST_C: np.ndarray,
-    SZA_deg: np.ndarray,
-    albedo: np.ndarray,
-    canopy_height_meters: np.ndarray,
-    elevation_m: np.ndarray,
-    emissivity: np.ndarray,
-    wind_speed_mps: np.ndarray,
-) -> np.ndarray:
+    RH: Union[Raster, np.ndarray, float],
+    NDVI: Union[Raster, np.ndarray, float],
+    ST_C: Union[Raster, np.ndarray, float],
+    SZA_deg: Union[Raster, np.ndarray, float],
+    albedo: Union[Raster, np.ndarray, float],
+    canopy_height_meters: Union[Raster, np.ndarray, float],
+    elevation_m: Union[Raster, np.ndarray, float],
+    emissivity: Union[Raster, np.ndarray, float],
+    wind_speed_mps: Union[Raster, np.ndarray, float],
+) -> Union[Raster, np.ndarray]:
     """
     Calibrate relative humidity estimates by applying OLS error correction.
     
@@ -32,29 +35,29 @@ def calibrate_RH(
     
     Parameters
     ----------
-    RH : np.ndarray
-        Relative humidity estimates to be calibrated
-    NDVI : np.ndarray
+    RH : Union[Raster, np.ndarray, float]
+        Relative humidity estimates to be calibrated. Can be a Raster, n-dimensional array, or scalar.
+    NDVI : Union[Raster, np.ndarray, float]
         Normalized Difference Vegetation Index
-    ST_C : np.ndarray
+    ST_C : Union[Raster, np.ndarray, float]
         Surface Temperature in Celsius
-    SZA_deg : np.ndarray
+    SZA_deg : Union[Raster, np.ndarray, float]
         Solar Zenith Angle in degrees
-    albedo : np.ndarray
+    albedo : Union[Raster, np.ndarray, float]
         Surface albedo
-    canopy_height_meters : np.ndarray
+    canopy_height_meters : Union[Raster, np.ndarray, float]
         Canopy height in meters
-    elevation_m : np.ndarray
+    elevation_m : Union[Raster, np.ndarray, float]
         Elevation in meters
-    emissivity : np.ndarray
+    emissivity : Union[Raster, np.ndarray, float]
         Surface emissivity
-    wind_speed_mps : np.ndarray
+    wind_speed_mps : Union[Raster, np.ndarray, float]
         Wind speed in meters per second
     
     Returns
     -------
-    np.ndarray
-        Calibrated relative humidity values (raw - predicted_error)
+    Union[Raster, np.ndarray]
+        Calibrated relative humidity values (RH - predicted_error). Type matches input type.
     
     Examples
     --------
@@ -76,10 +79,44 @@ def calibrate_RH(
     -----
     - Model Performance: R² = 0.2938, RMSE = 0.0638, MAE = 0.0491
     - Calibration formula: RH_cal = RH - predicted_error
-    - All input arrays must have the same length
+    - Input arrays should have compatible shapes (normalized via broadcasting)
     - Input arrays may contain NaN values; output will be NaN at those positions
     - Coefficients were derived from ECOv002 cal/val dataset
+    - Raster outputs maintain the geometry of the input Raster
     """
+    # Track original input type and geometry
+    original_rh_is_raster = isinstance(RH, Raster)
+    original_geometry = getattr(RH, 'geometry', None) if original_rh_is_raster else None
+    
+    # Convert all inputs to arrays
+    rh_arr = np.asarray(RH, dtype=float)
+    ndvi_arr = np.asarray(NDVI, dtype=float)
+    st_c_arr = np.asarray(ST_C, dtype=float)
+    sza_deg_arr = np.asarray(SZA_deg, dtype=float)
+    albedo_arr = np.asarray(albedo, dtype=float)
+    canopy_height_arr = np.asarray(canopy_height_meters, dtype=float)
+    elevation_arr = np.asarray(elevation_m, dtype=float)
+    emissivity_arr = np.asarray(emissivity, dtype=float)
+    wind_speed_arr = np.asarray(wind_speed_mps, dtype=float)
+    
+    # Broadcast all arrays to same shape
+    (rh_arr, ndvi_arr, st_c_arr, sza_deg_arr, albedo_arr, 
+     canopy_height_arr, elevation_arr, emissivity_arr, wind_speed_arr) = np.broadcast_arrays(
+        rh_arr, ndvi_arr, st_c_arr, sza_deg_arr, albedo_arr,
+        canopy_height_arr, elevation_arr, emissivity_arr, wind_speed_arr
+    )
+    
+    # Record original shape and flatten all arrays for processing
+    original_shape = rh_arr.shape
+    rh_arr = rh_arr.flatten()
+    ndvi_arr = ndvi_arr.flatten()
+    st_c_arr = st_c_arr.flatten()
+    sza_deg_arr = sza_deg_arr.flatten()
+    albedo_arr = albedo_arr.flatten()
+    canopy_height_arr = canopy_height_arr.flatten()
+    elevation_arr = elevation_arr.flatten()
+    emissivity_arr = emissivity_arr.flatten()
+    wind_speed_arr = wind_speed_arr.flatten()
     # Load coefficients from CSV
     coef_path = Path(__file__).parent / "RH_calibration_coefficients.csv"
     
@@ -102,20 +139,18 @@ def calibrate_RH(
     
     # Build predictor dictionary
     predictors = {
-        'NDVI': np.asarray(NDVI),
-        'ST_C': np.asarray(ST_C),
-        'SZA_deg': np.asarray(SZA_deg),
-        'albedo': np.asarray(albedo),
-        'canopy_height_meters': np.asarray(canopy_height_meters),
-        'elevation_m': np.asarray(elevation_m),
-        'emissivity': np.asarray(emissivity),
-        'wind_speed_mps': np.asarray(wind_speed_mps),
+        'NDVI': ndvi_arr,
+        'ST_C': st_c_arr,
+        'SZA_deg': sza_deg_arr,
+        'albedo': albedo_arr,
+        'canopy_height_meters': canopy_height_arr,
+        'elevation_m': elevation_arr,
+        'emissivity': emissivity_arr,
+        'wind_speed_mps': wind_speed_arr,
     }
     
-    RH = np.asarray(RH)
-    
     # Check array lengths match
-    n = len(RH)
+    n = len(rh_arr)
     for var_name, arr in predictors.items():
         if len(arr) != n:
             raise ValueError(
@@ -127,7 +162,7 @@ def calibrate_RH(
     valid_mask = np.ones(n, dtype=bool)
     for arr in predictors.values():
         valid_mask &= ~np.isnan(arr)
-    valid_mask &= ~np.isnan(RH)
+    valid_mask &= ~np.isnan(rh_arr)
     
     # Initialize output with NaN
     calibrated = np.full(n, np.nan, dtype=float)
@@ -146,6 +181,14 @@ def calibrate_RH(
             predicted_error += coef * predictors[var][valid_mask]
         
         # Apply calibration: calibrated = raw - predicted_error
-        calibrated[valid_mask] = RH[valid_mask] - predicted_error
+        calibrated[valid_mask] = rh_arr[valid_mask] - predicted_error
+    
+    # Reshape result back to original shape
+    calibrated = calibrated.reshape(original_shape)
+    
+    # Wrap in Raster if input was Raster
+    if original_rh_is_raster:
+        import rasters as rt
+        calibrated = rt.Raster(calibrated, geometry=original_geometry)
     
     return calibrated
