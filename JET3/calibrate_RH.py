@@ -13,7 +13,8 @@ import pandas as pd
 from pathlib import Path
 
 
-def calibrate_RH(data, raw_rh_col='RH', output_col='RH_cal'):
+def calibrate_RH(ndvi, st_c, sza_deg, albedo, canopy_height_meters, elevation_m, 
+                 emissivity, wind_speed_mps, raw_rh):
     """
     Calibrate relative humidity estimates by applying OLS error correction.
     
@@ -22,42 +23,51 @@ def calibrate_RH(data, raw_rh_col='RH', output_col='RH_cal'):
     
     Parameters
     ----------
-    data : pd.DataFrame
-        Input data with the following required columns:
-        - raw_rh_col (default='RH'): Column with raw humidity estimates
-        - NDVI, ST_C, SZA_deg, albedo, canopy_height_meters, elevation_m, 
-          emissivity, wind_speed_mps (predictor variables)
-    raw_rh_col : str, optional
-        Name of column containing raw RH estimates (default: 'RH')
-    output_col : str, optional
-        Name for output column with calibrated values (default: 'RH_cal')
+    ndvi : np.ndarray
+        Normalized Difference Vegetation Index
+    st_c : np.ndarray
+        Surface Temperature in Celsius
+    sza_deg : np.ndarray
+        Solar Zenith Angle in degrees
+    albedo : np.ndarray
+        Surface albedo
+    canopy_height_meters : np.ndarray
+        Canopy height in meters
+    elevation_m : np.ndarray
+        Elevation in meters
+    emissivity : np.ndarray
+        Surface emissivity
+    wind_speed_mps : np.ndarray
+        Wind speed in meters per second
+    raw_rh : np.ndarray
+        Raw relative humidity estimates
     
     Returns
     -------
-    pd.DataFrame
-        Copy of input data with added columns:
-        - output_col: Calibrated RH values
-        - '{raw_rh_col}_predicted_error': Predicted systematic error
+    np.ndarray
+        Calibrated relative humidity values (raw - predicted_error)
     
     Examples
     --------
-    >>> import pandas as pd
+    >>> import numpy as np
     >>> from JET3.calibrate_RH import calibrate_RH
     >>> 
-    >>> # Load remote sensing data with raw estimates
-    >>> data = pd.read_csv('remote_sensing_data.csv')
+    >>> # Example with 10 samples
+    >>> ndvi = np.array([0.5, 0.6, 0.7, ...])
+    >>> st_c = np.array([35.2, 36.1, 37.5, ...])
+    >>> # ... provide all 8 predictors and raw_rh
     >>> 
     >>> # Calibrate
-    >>> calibrated = calibrate_RH(data)
-    >>> 
-    >>> # Access results
-    >>> print(calibrated[['RH', 'RH_cal']])
+    >>> calibrated = calibrate_RH(ndvi, st_c, sza_deg, albedo, 
+    ...                           canopy_height_meters, elevation_m, 
+    ...                           emissivity, wind_speed_mps, raw_rh)
     
     Notes
     -----
     - Model Performance: R² = 0.2938, RMSE = 0.0638, MAE = 0.0491
-    - Calibration formula: RH_cal = RH - predicted_error
-    - Predictor variables must not contain NaN values
+    - Calibration formula: RH_cal = raw_rh - predicted_error
+    - All input arrays must have the same length
+    - Input arrays must not contain NaN values
     - Coefficients were derived from ECOv002 cal/val dataset
     """
     # Load coefficients from CSV
@@ -79,47 +89,56 @@ def calibrate_RH(data, raw_rh_col='RH', output_col='RH_cal'):
     
     # Extract coefficients for predictor variables
     predictor_coefs = coef_df[coef_df['Variable'] != 'Intercept'].copy()
-    predictor_vars = predictor_coefs['Variable'].tolist()
     
-    # Check that raw RH column exists
-    if raw_rh_col not in data.columns:
-        raise ValueError(f"Raw humidity column '{raw_rh_col}' not found in input data")
+    # Build predictor dictionary
+    predictors = {
+        'NDVI': np.asarray(ndvi),
+        'ST_C': np.asarray(st_c),
+        'SZA_deg': np.asarray(sza_deg),
+        'albedo': np.asarray(albedo),
+        'canopy_height_meters': np.asarray(canopy_height_meters),
+        'elevation_m': np.asarray(elevation_m),
+        'emissivity': np.asarray(emissivity),
+        'wind_speed_mps': np.asarray(wind_speed_mps),
+    }
     
-    # Check that all required predictor variables are in input data
-    missing_vars = [v for v in predictor_vars if v not in data.columns]
-    if missing_vars:
-        raise ValueError(
-            f"Missing required predictor variables in input data: {missing_vars}\n"
-            f"Required variables: {predictor_vars}"
-        )
+    raw_rh = np.asarray(raw_rh)
     
-    # Make a copy to avoid modifying original
-    result = data.copy()
-    
-    # Extract predictor values
-    X = data[predictor_vars].copy()
+    # Check array lengths match
+    n = len(raw_rh)
+    for var_name, arr in predictors.items():
+        if len(arr) != n:
+            raise ValueError(
+                f"Input array length mismatch: {var_name} has length {len(arr)}, "
+                f"but raw_rh has length {n}"
+            )
     
     # Check for NaN values
-    has_nan = X.isna().any(axis=1)
-    if has_nan.any():
+    for var_name, arr in predictors.items():
+        if np.isnan(arr).any():
+            raise ValueError(
+                f"Input array '{var_name}' contains NaN values.\n"
+                "Please remove or impute missing values before calling this function."
+            )
+    
+    if np.isnan(raw_rh).any():
         raise ValueError(
-            f"Input data contains {has_nan.sum()} rows with NaN values in predictor variables.\n"
+            "Input array 'raw_rh' contains NaN values.\n"
             "Please remove or impute missing values before calling this function."
         )
     
     # Apply OLS regression to predict systematic error
     # error = intercept + sum(coef_i * predictor_i)
-    predicted_error = np.full(len(data), intercept, dtype=float)
+    predicted_error = np.full(n, intercept, dtype=float)
     
     for _, row in predictor_coefs.iterrows():
         var = row['Variable']
         coef = row['Coefficient']
-        predicted_error += coef * X[var].values
-    
-    # Store predicted error
-    result[f'{raw_rh_col}_predicted_error'] = predicted_error
+        if var not in predictors:
+            raise ValueError(f"Predictor '{var}' from coefficients not found in input parameters")
+        predicted_error += coef * predictors[var]
     
     # Apply calibration: calibrated = raw - predicted_error
-    result[output_col] = data[raw_rh_col] - predicted_error
+    calibrated = raw_rh - predicted_error
     
-    return result
+    return calibrated
