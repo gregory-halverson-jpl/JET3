@@ -67,6 +67,12 @@ def JET(
         wind_speed_mps: Union[Raster, np.ndarray, float] = None,
         canopy_temperature_C: Union[Raster, np.ndarray] = None, # canopy temperature in Celsius (initialized to surface temperature if left as None)
         soil_temperature_C: Union[Raster, np.ndarray] = None, # soil temperature in Celsius (initialized to surface temperature if left as None)
+        ST_C_UQ: Union[Raster, np.ndarray, float] = None,  # surface temperature uncertainty (K)
+        NDVI_UQ: Union[Raster, np.ndarray, float] = None,  # NDVI uncertainty (dimensionless)
+        albedo_UQ: Union[Raster, np.ndarray, float] = None,  # albedo uncertainty (dimensionless)
+        Ta_C_UQ: Union[Raster, np.ndarray, float] = None,  # air temperature uncertainty (K)
+        RH_UQ: Union[Raster, np.ndarray, float] = None,  # relative humidity uncertainty (fraction or %)
+        SM_UQ: Union[Raster, np.ndarray, float] = None,  # soil moisture uncertainty (m³/m³)
         C4_fraction: Union[Raster, np.ndarray] = None,  # fraction of C4 plants
         carbon_uptake_efficiency: Union[Raster, np.ndarray] = None,  # intrinsic quantum efficiency for carbon uptake
         kn: np.ndarray = None,
