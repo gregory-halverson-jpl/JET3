@@ -13,8 +13,17 @@ import pandas as pd
 from pathlib import Path
 
 
-def calibrate_Ta_C(ndvi, st_c, sza_deg, albedo, canopy_height_meters, elevation_m, 
-                   emissivity, wind_speed_mps, raw_ta_c):
+def calibrate_Ta_C(
+    NDVI: np.ndarray,
+    ST_C: np.ndarray,
+    SZA_deg: np.ndarray,
+    albedo: np.ndarray,
+    canopy_height_meters: np.ndarray,
+    elevation_m: np.ndarray,
+    emissivity: np.ndarray,
+    wind_speed_mps: np.ndarray,
+    raw_ta_c: np.ndarray,
+) -> np.ndarray:
     """
     Calibrate air temperature estimates by applying OLS error correction.
     
@@ -23,11 +32,11 @@ def calibrate_Ta_C(ndvi, st_c, sza_deg, albedo, canopy_height_meters, elevation_
     
     Parameters
     ----------
-    ndvi : np.ndarray
+    NDVI : np.ndarray
         Normalized Difference Vegetation Index
-    st_c : np.ndarray
+    ST_C : np.ndarray
         Surface Temperature in Celsius
-    sza_deg : np.ndarray
+    SZA_deg : np.ndarray
         Solar Zenith Angle in degrees
     albedo : np.ndarray
         Surface albedo
@@ -53,12 +62,12 @@ def calibrate_Ta_C(ndvi, st_c, sza_deg, albedo, canopy_height_meters, elevation_
     >>> from JET3.calibrate_Ta_C import calibrate_Ta_C
     >>> 
     >>> # Example with 10 samples
-    >>> ndvi = np.array([0.5, 0.6, 0.7, ...])
-    >>> st_c = np.array([35.2, 36.1, 37.5, ...])
+    >>> NDVI = np.array([0.5, 0.6, 0.7, ...])
+    >>> ST_C = np.array([35.2, 36.1, 37.5, ...])
     >>> # ... provide all 8 predictors and raw_ta_c
     >>> 
     >>> # Calibrate
-    >>> calibrated = calibrate_Ta_C(ndvi, st_c, sza_deg, albedo, 
+    >>> calibrated = calibrate_Ta_C(NDVI, ST_C, SZA_deg, albedo, 
     ...                            canopy_height_meters, elevation_m, 
     ...                            emissivity, wind_speed_mps, raw_ta_c)
     
@@ -92,9 +101,9 @@ def calibrate_Ta_C(ndvi, st_c, sza_deg, albedo, canopy_height_meters, elevation_
     
     # Build predictor dictionary
     predictors = {
-        'NDVI': np.asarray(ndvi),
-        'ST_C': np.asarray(st_c),
-        'SZA_deg': np.asarray(sza_deg),
+        'NDVI': np.asarray(NDVI),
+        'ST_C': np.asarray(ST_C),
+        'SZA_deg': np.asarray(SZA_deg),
         'albedo': np.asarray(albedo),
         'canopy_height_meters': np.asarray(canopy_height_meters),
         'elevation_m': np.asarray(elevation_m),
