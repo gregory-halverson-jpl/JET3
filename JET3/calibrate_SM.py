@@ -76,7 +76,7 @@ def calibrate_SM(
     - Model Performance: R² = 0.0577, RMSE = 0.0521, MAE = 0.0398
     - Calibration formula: SM_cal = raw_sm - predicted_error
     - All input arrays must have the same length
-    - Input arrays must not contain NaN values
+    - Input arrays may contain NaN values; output will be NaN at those positions
     - Coefficients were derived from ECOv002 cal/val dataset
     """
     # Load coefficients from CSV
@@ -122,32 +122,29 @@ def calibrate_SM(
                 f"but raw_sm has length {n}"
             )
     
-    # Check for NaN values
-    for var_name, arr in predictors.items():
-        if np.isnan(arr).any():
-            raise ValueError(
-                f"Input array '{var_name}' contains NaN values.\n"
-                "Please remove or impute missing values before calling this function."
-            )
+    # Create mask for valid (non-NaN) values across all inputs
+    valid_mask = np.ones(n, dtype=bool)
+    for arr in predictors.values():
+        valid_mask &= ~np.isnan(arr)
+    valid_mask &= ~np.isnan(raw_sm)
     
-    if np.isnan(raw_sm).any():
-        raise ValueError(
-            "Input array 'raw_sm' contains NaN values.\n"
-            "Please remove or impute missing values before calling this function."
-        )
+    # Initialize output with NaN
+    calibrated = np.full(n, np.nan, dtype=float)
     
-    # Apply OLS regression to predict systematic error
-    # error = intercept + sum(coef_i * predictor_i)
-    predicted_error = np.full(n, intercept, dtype=float)
-    
-    for _, row in predictor_coefs.iterrows():
-        var = row['Variable']
-        coef = row['Coefficient']
-        if var not in predictors:
-            raise ValueError(f"Predictor '{var}' from coefficients not found in input parameters")
-        predicted_error += coef * predictors[var]
-    
-    # Apply calibration: calibrated = raw - predicted_error
-    calibrated = raw_sm - predicted_error
+    # Only calculate for valid positions
+    if valid_mask.any():
+        # Apply OLS regression to predict systematic error
+        # error = intercept + sum(coef_i * predictor_i)
+        predicted_error = np.full(valid_mask.sum(), intercept, dtype=float)
+        
+        for _, row in predictor_coefs.iterrows():
+            var = row['Variable']
+            coef = row['Coefficient']
+            if var not in predictors:
+                raise ValueError(f"Predictor '{var}' from coefficients not found in input parameters")
+            predicted_error += coef * predictors[var][valid_mask]
+        
+        # Apply calibration: calibrated = raw - predicted_error
+        calibrated[valid_mask] = raw_sm[valid_mask] - predicted_error
     
     return calibrated

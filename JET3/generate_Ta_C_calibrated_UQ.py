@@ -78,7 +78,7 @@ def generate_Ta_C_calibrated_UQ(
     -----
     - Model Performance: R² = 0.0789, RMSE = 1.3780, MAE = 1.0622
     - All input arrays must have the same length
-    - Input arrays must not contain NaN values
+    - Input arrays may contain NaN values; output will be NaN at those positions
     - Coefficients were derived from ECOv002 cal/val dataset
     - These coefficients predict uncertainty of calibrated values (after error correction)
     """
@@ -126,25 +126,30 @@ def generate_Ta_C_calibrated_UQ(
                 f"but other arrays have length {n}"
             )
     
-    # Check for NaN values
-    for var_name, arr in predictors.items():
-        if np.isnan(arr).any():
-            raise ValueError(
-                f"Input array '{var_name}' contains NaN values.\n"
-                "Please remove or impute missing values before calling this function."
-            )
+    # Create mask for valid (non-NaN) values across all inputs
+    valid_mask = np.ones(n, dtype=bool)
+    for arr in predictors.values():
+        valid_mask &= ~np.isnan(arr)
     
-    # Apply OLS regression: UQ = intercept + sum(coef_i * predictor_i)
-    uq = np.full(n, intercept, dtype=float)
+    # Initialize output with NaN
+    uq = np.full(n, np.nan, dtype=float)
     
-    for _, row in predictor_coefs.iterrows():
-        var = row['Variable']
-        coef = row['Coefficient']
-        if var not in predictors:
-            raise ValueError(f"Predictor '{var}' from coefficients not found in input parameters")
-        uq += coef * predictors[var]
-    
-    # Ensure non-negative uncertainty
-    uq = np.maximum(uq, 0)
+    # Only calculate for valid positions
+    if valid_mask.any():
+        # Apply OLS regression: UQ = intercept + sum(coef_i * predictor_i)
+        uq_valid = np.full(valid_mask.sum(), intercept, dtype=float)
+        
+        for _, row in predictor_coefs.iterrows():
+            var = row['Variable']
+            coef = row['Coefficient']
+            if var not in predictors:
+                raise ValueError(f"Predictor '{var}' from coefficients not found in input parameters")
+            uq_valid += coef * predictors[var][valid_mask]
+        
+        # Ensure non-negative uncertainty
+        uq_valid = np.maximum(uq_valid, 0)
+        
+        # Assign to output
+        uq[valid_mask] = uq_valid
     
     return uq
