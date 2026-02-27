@@ -851,6 +851,9 @@ def JET(
         'NIR_diffuse_Wm2': NIR_diffuse_Wm2,
         'PAR_direct_Wm2': PAR_direct_Wm2,
         'NIR_direct_Wm2': NIR_direct_Wm2,
+        'Ta_C': Ta_C,
+        'RH': RH,
+        'SM': soil_moisture,
         'Rn_BESS_Wm2': Rn_BESS_Wm2,
         'LE_BESS_Wm2': LE_BESS_Wm2,
         'ET_daylight_BESS_kg': ET_daylight_BESS_kg,
@@ -900,5 +903,20 @@ def JET(
             'ET_daylight_AquaSEBS_kg': ET_daylight_AquaSEBS_kg,
             'SWnet_Wm2': SWnet_Wm2
         })
+    
+    # Add UQ values if they were generated
+    if generate_UQ:
+        if Ta_C_UQ is not None:
+            results['Ta_C_UQ'] = Ta_C_UQ
+        if RH_UQ is not None:
+            results['RH_UQ'] = RH_UQ
+        if SM_UQ is not None:
+            results['SM_UQ'] = SM_UQ
+        if ST_C_UQ is not None:
+            results['ST_C_UQ'] = ST_C_UQ
+        if NDVI_UQ is not None:
+            results['NDVI_UQ'] = NDVI_UQ
+        if albedo_UQ is not None:
+            results['albedo_UQ'] = albedo_UQ
 
     return results
