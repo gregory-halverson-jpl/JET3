@@ -10,6 +10,7 @@ import posixpath
 import warnings
 from datetime import datetime
 from typing import Union, Dict
+
 import numpy as np
 import rasters as rt
 from rasters import Raster, RasterGeometry
@@ -40,6 +41,8 @@ from .generate_RH_uncalibrated_UQ import generate_RH_uncalibrated_UQ
 from .generate_SM_calibrated_UQ import generate_SM_calibrated_UQ
 from .generate_Ta_C_calibrated_UQ import generate_Ta_C_calibrated_UQ
 from .generate_RH_calibrated_UQ import generate_RH_calibrated_UQ
+from .sharpen_soil_moisture_data import sharpen_soil_moisture_data
+from .sharpen_meteorology_data import sharpen_meteorology_data
 
 logger = logging.getLogger(__name__)
 
@@ -99,11 +102,14 @@ def JET(
         downsampling: str = None,
         GEOS5FP_connection: GEOS5FPConnection = None,
         water_mask: Union[Raster, np.ndarray, bool] = None,
+        upsampling: str = UPSAMPLING,
+        downsampling: str = DOWNSAMPLING,
         offline_mode: bool = False,
         include_water_surface: bool = True,
         generate_UQ: bool = False,
         use_calibration: bool = False,
-        sharpen_soil_moisture: bool = SHARPEN_SOIL_MOISTURE) -> Dict[str, Union[Raster, np.ndarray]]:
+        sharpen_soil_moisture: bool = SHARPEN_SOIL_MOISTURE,
+        sharpen_meteorology: bool = SHARPEN_METEOROLOGY):
     """
     Main science function for JET (JPL Evapotranspiration Ensemble).
     
@@ -200,6 +206,31 @@ def JET(
     if GEOS5FP_connection is None:
         GEOS5FP_connection = GEOS5FPConnection()
     
+    # Sharpen meteorological variables if enabled
+    if sharpen_meteorology:
+        try:
+            Ta_C, RH, Ta_C_smooth = sharpen_meteorology_data(
+                ST_C=ST_C,
+                NDVI=NDVI,
+                albedo=albedo,
+                geometry=geometry,
+                coarse_geometry=coarse_geometry,
+                time_UTC=time_UTC,
+                upsampling=upsampling,
+                downsampling=downsampling,
+                GEOS5FP_connection=GEOS5FP_connection
+            )
+        except Exception as e:
+            logger.error(e)
+            logger.warning("unable to sharpen meteorology")
+            Ta_C = GEOS5FP_connection.Ta_C(time_UTC=time_UTC, geometry=geometry, resampling=downsampling)
+            Ta_C_smooth = Ta_C
+            RH = GEOS5FP_connection.RH(time_UTC=time_UTC, geometry=geometry, resampling=downsampling)
+    else:
+        Ta_C = GEOS5FP_connection.Ta_C(time_UTC=time_UTC, geometry=geometry, resampling=downsampling)
+        Ta_C_smooth = Ta_C
+        RH = GEOS5FP_connection.RH(time_UTC=time_UTC, geometry=geometry, resampling=downsampling)
+
     # Sharpen soil moisture if enabled
     if soil_moisture is None:
         if sharpen_soil_moisture:
@@ -212,10 +243,6 @@ def JET(
                     geometry=geometry,
                     coarse_geometry=coarse_geometry,
                     time_UTC=time_UTC,
-                    date_UTC=date_UTC,
-                    tile=tile,
-                    orbit=orbit,
-                    scene=scene,
                     upsampling=upsampling,
                     downsampling=downsampling,
                     GEOS5FP_connection=GEOS5FP_connection
