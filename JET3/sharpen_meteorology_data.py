@@ -6,7 +6,7 @@ import pandas as pd
 import rasters as rt
 import sklearn
 from check_distribution import check_distribution
-from GEOS5FP import GEOS5FP
+from GEOS5FP import GEOS5FPConnection
 from rasters import Raster, RasterGeometry
 
 from .constants import *
@@ -24,7 +24,7 @@ def sharpen_meteorology_data(
     time_UTC: datetime,
     upsampling: str = UPSAMPLING,
     downsampling: str = DOWNSAMPLING,
-    GEOS5FP_connection: GEOS5FP,
+    GEOS5FP_connection: GEOS5FPConnection = None,
 ) -> tuple[Raster, Raster, Raster]:
     """
     Sharpens air temperature and relative humidity using a linear regression model.
@@ -49,6 +49,9 @@ def sharpen_meteorology_data(
     Raises:
         BlankOutput: If the sharpened air temperature or humidity output is blank.
     """
+    if GEOS5FP_connection is None:
+        GEOS5FP_connection = GEOS5FPConnection()
+
     ST_C_coarse = ST_C.to_geometry(coarse_geometry, resampling=upsampling)
     check_distribution(ST_C_coarse, "ST_C_coarse")
     NDVI_coarse = NDVI.to_geometry(coarse_geometry, resampling=upsampling)

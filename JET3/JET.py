@@ -99,7 +99,6 @@ def JET(
         soil_grids_directory: str = None,
         GEDI_directory: str = None,
         Rn_model_name: str = None,
-        downsampling: str = None,
         GEOS5FP_connection: GEOS5FPConnection = None,
         water_mask: Union[Raster, np.ndarray, bool] = None,
         upsampling: str = UPSAMPLING,
@@ -207,8 +206,12 @@ def JET(
         GEOS5FP_connection = GEOS5FPConnection()
     
     # Sharpen meteorological variables if enabled
-    if sharpen_meteorology:
+    if sharpen_meteorology and processing_as_raster:
         try:
+            if coarse_geometry is None:
+                # Create coarse geometry
+                coarse_geometry = geometry.rescale(GEOS_IN_SENTINEL_COARSE_CELL_SIZE)
+
             Ta_C, RH, Ta_C_smooth = sharpen_meteorology_data(
                 ST_C=ST_C,
                 NDVI=NDVI,
@@ -233,8 +236,12 @@ def JET(
 
     # Sharpen soil moisture if enabled
     if soil_moisture is None:
-        if sharpen_soil_moisture:
+        if sharpen_soil_moisture and processing_as_raster:
             try:
+                if coarse_geometry is None:
+                    # Create coarse geometry
+                    coarse_geometry = geometry.rescale(GEOS_IN_SENTINEL_COARSE_CELL_SIZE)
+                    
                 soil_moisture = sharpen_soil_moisture_data(
                     ST_C=ST_C,
                     NDVI=NDVI,
