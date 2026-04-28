@@ -200,39 +200,46 @@ def JET(
             raise MissingOfflineParameter(f"in offline mode, the following parameters must be provided: {', '.join(offline_vars)}")
     
     processing_as_raster = isinstance(ST_C, Raster)
+    coarse_geometry = None
+    Ta_C_smooth = Ta_C
     
     # Create GEOS5FP connection if not provided
     if GEOS5FP_connection is None:
         GEOS5FP_connection = GEOS5FPConnection()
     
-    # Sharpen meteorological variables if enabled
-    if sharpen_meteorology and processing_as_raster:
-        try:
-            if coarse_geometry is None:
+    # Retrieve meteorological variables only when they were not supplied.
+    if Ta_C is None or RH is None:
+        # Sharpen meteorological variables if enabled and both variables are missing.
+        if sharpen_meteorology and processing_as_raster and Ta_C is None and RH is None:
+            try:
                 # Create coarse geometry
                 coarse_geometry = geometry.rescale(GEOS_IN_SENTINEL_COARSE_CELL_SIZE)
 
-            Ta_C, RH, Ta_C_smooth = sharpen_meteorology_data(
-                ST_C=ST_C,
-                NDVI=NDVI,
-                albedo=albedo,
-                geometry=geometry,
-                coarse_geometry=coarse_geometry,
-                time_UTC=time_UTC,
-                upsampling=upsampling,
-                downsampling=downsampling,
-                GEOS5FP_connection=GEOS5FP_connection
-            )
-        except Exception as e:
-            logger.error(e)
-            logger.warning("unable to sharpen meteorology")
-            Ta_C = GEOS5FP_connection.Ta_C(time_UTC=time_UTC, geometry=geometry, resampling=downsampling)
-            Ta_C_smooth = Ta_C
-            RH = GEOS5FP_connection.RH(time_UTC=time_UTC, geometry=geometry, resampling=downsampling)
-    else:
-        Ta_C = GEOS5FP_connection.Ta_C(time_UTC=time_UTC, geometry=geometry, resampling=downsampling)
-        Ta_C_smooth = Ta_C
-        RH = GEOS5FP_connection.RH(time_UTC=time_UTC, geometry=geometry, resampling=downsampling)
+                Ta_C, RH, Ta_C_smooth = sharpen_meteorology_data(
+                    ST_C=ST_C,
+                    NDVI=NDVI,
+                    albedo=albedo,
+                    geometry=geometry,
+                    coarse_geometry=coarse_geometry,
+                    time_UTC=time_UTC,
+                    upsampling=upsampling,
+                    downsampling=downsampling,
+                    GEOS5FP_connection=GEOS5FP_connection
+                )
+            except Exception as e:
+                logger.error(e)
+                logger.warning("unable to sharpen meteorology")
+                if Ta_C is None:
+                    Ta_C = GEOS5FP_connection.Ta_C(time_UTC=time_UTC, geometry=geometry, resampling=downsampling)
+                    Ta_C_smooth = Ta_C
+                if RH is None:
+                    RH = GEOS5FP_connection.RH(time_UTC=time_UTC, geometry=geometry, resampling=downsampling)
+        else:
+            if Ta_C is None:
+                Ta_C = GEOS5FP_connection.Ta_C(time_UTC=time_UTC, geometry=geometry, resampling=downsampling)
+                Ta_C_smooth = Ta_C
+            if RH is None:
+                RH = GEOS5FP_connection.RH(time_UTC=time_UTC, geometry=geometry, resampling=downsampling)
 
     # Sharpen soil moisture if enabled
     if soil_moisture is None:
