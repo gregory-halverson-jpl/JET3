@@ -22,7 +22,6 @@ def sharpen_soil_moisture_data(
     geometry: RasterGeometry,
     coarse_geometry: RasterGeometry,
     time_UTC: datetime,
-    date_UTC: date,
     upsampling: str,
     downsampling: str,
     GEOS5FP_connection: GEOS5FP,
@@ -38,7 +37,6 @@ def sharpen_soil_moisture_data(
         geometry: Fine-resolution raster geometry.
         coarse_geometry: Coarse-resolution raster geometry.
         time_UTC: UTC timestamp of the overpass.
-        date_UTC: UTC date of the overpass.
         upsampling: Upsampling method for spatial resampling.
         downsampling: Downsampling method for spatial resampling.
         GEOS5FP_connection: An instance of the GEOS5FP connection.
