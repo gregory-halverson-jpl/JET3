@@ -41,15 +41,18 @@ The ensemble median provides robust ET estimates with reduced uncertainty compar
 
 ### Required Inputs
 
-JET3 requires the following input variables:
-- **Surface temperature (ST)**: Land surface temperature in Celsius
+JET3 requires the following core input variables:
+- **Surface temperature (ST_C)**: Land surface temperature in Celsius
+- **Surface emissivity (emissivity)**: Broadband thermal emissivity (0-1)
 - **NDVI**: Normalized Difference Vegetation Index
 - **Albedo**: Surface albedo
-- **Air temperature (Ta)**: Near-surface air temperature in Celsius
+- **Air temperature (Ta_C)**: Near-surface air temperature in Celsius
 - **Relative humidity (RH)**: Near-surface relative humidity (0-1)
-- **Soil moisture (SM)**: Volumetric soil moisture (m³/m³)
-- **Net radiation (Rn)**: Net radiation in W/m²
-- **Additional meteorological variables** for individual models
+- **Soil moisture (soil_moisture)**: Volumetric soil moisture (m³/m³)
+- **Geometry (geometry)**: Spatial geometry object for raster or point processing
+- **Time (time_UTC)**: Observation timestamp(s) in UTC
+
+Additional meteorological and atmospheric variables can be provided explicitly, or retrieved internally when not running in offline mode.
 
 These inputs can be derived from any appropriate remote sensing or ground-based data sources.
 
@@ -72,33 +75,31 @@ pip install -e .
 ```python
 from JET3 import JET
 
-# Initialize JET ensemble processor
-jet = JET()
-
 # Compute ET ensemble with your input data
-results = jet.process(
-    ST=surface_temperature,      # Surface temperature (°C)
-    NDVI=ndvi,                   # Normalized Difference Vegetation Index
-    albedo=albedo,               # Surface albedo
-    Ta=air_temperature,          # Air temperature (°C)
-    RH=relative_humidity,        # Relative humidity (0-1)
-    SM=soil_moisture,            # Soil moisture (m³/m³)
-    Rn=net_radiation,            # Net radiation (W/m²)
-    # ... other required inputs
+results = JET(
+    ST_C=surface_temperature_c,      # Surface temperature (°C)
+    emissivity=surface_emissivity,   # Surface emissivity (0-1)
+    NDVI=ndvi,                       # Normalized Difference Vegetation Index
+    albedo=albedo,                   # Surface albedo (0-1)
+    geometry=geometry,               # rasters.RasterGeometry or rasters.MultiPoint
+    time_UTC=time_utc,               # datetime or list of datetime values (UTC)
+    Ta_C=air_temperature_c,          # Air temperature (°C)
+    RH=relative_humidity,            # Relative humidity (0-1)
+    soil_moisture=soil_moisture,     # Soil moisture (m³/m³)
 )
 
 # Access individual model outputs
-et_ptjplsm = results['PTJPLSMinst']
-et_stic = results['STICJPLdaily']
-et_pmjpl = results['PMJPLdaily']
-et_bess = results['BESSJPLdaily']
+le_ptjplsm = results['LE_PTJPLSM_Wm2']
+et_stic_daylight = results['ET_daylight_STIC_kg']
+et_pmjpl_daylight = results['ET_daylight_PMJPL_kg']
+et_bess_daylight = results['ET_daylight_BESS_kg']
 
 # Access ensemble estimate
-et_ensemble = results['ETdaily']
-et_uncertainty = results['ETinstUncertainty']
+et_ensemble_daylight = results['ET_daylight_kg']
+et_uncertainty = results['ET_uncertainty']
 
 # Access derived products
-esi = results['ESI']  # Evaporative Stress Index
+esi = results['ESI_PTJPLSM']  # Evaporative Stress Index
 wue = results['WUE']  # Water Use Efficiency
 ```
 
@@ -187,7 +188,7 @@ The AquaSEBS methodology has been extensively validated against 19 in situ open 
 
 The model demonstrates particular strength in water-limited environments and performs well across spatial scales from 30m (Landsat) to 1km (MODIS) resolution.
 
-Water surface evaporation estimates are included in the `ETdaily` layer in mm per day, integrated over the daylight period from sunrise to sunset.
+Water surface evaporation estimates are included in the `ET_daylight_kg` output layer (equivalent to mm over daylight), integrated from sunrise to sunset.
 
 ### 4.7. Evaporative Stress Index (ESI) and Water Use Efficiency (WUE)
 
