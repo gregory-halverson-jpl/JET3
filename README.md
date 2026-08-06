@@ -22,7 +22,7 @@ NASA Jet Propulsion Laboratory 329F
 
 This package has been developed using open-science practices with New Technology Report (NTR) and open-source license from NASA Jet Propulsion Laboratory. The code is based on algorithms originally developed for the ECOSTRESS mission and refined for broader applications.
 
-## 1. Introduction 
+## Introduction 
 
 JET3 produces estimates of:
 - **Evapotranspiration (ET)**: The combined process of water evaporation from soil and transpiration from plants
@@ -41,19 +41,22 @@ The ensemble median provides robust ET estimates with reduced uncertainty compar
 
 ### Required Inputs
 
-JET3 requires the following input variables:
-- **Surface temperature (ST)**: Land surface temperature in Celsius
+JET3 requires the following core input variables:
+- **Surface temperature (ST_C)**: Land surface temperature in Celsius
+- **Surface emissivity (emissivity)**: Broadband thermal emissivity (0-1)
 - **NDVI**: Normalized Difference Vegetation Index
 - **Albedo**: Surface albedo
-- **Air temperature (Ta)**: Near-surface air temperature in Celsius
+- **Air temperature (Ta_C)**: Near-surface air temperature in Celsius
 - **Relative humidity (RH)**: Near-surface relative humidity (0-1)
-- **Soil moisture (SM)**: Volumetric soil moisture (m³/m³)
-- **Net radiation (Rn)**: Net radiation in W/m²
-- **Additional meteorological variables** for individual models
+- **Soil moisture (soil_moisture)**: Volumetric soil moisture (m³/m³)
+- **Geometry (geometry)**: Spatial geometry object for raster or point processing
+- **Time (time_UTC)**: Observation timestamp(s) in UTC
+
+Additional meteorological and atmospheric variables can be provided explicitly, or retrieved internally when not running in offline mode.
 
 These inputs can be derived from any appropriate remote sensing or ground-based data sources.
 
-## 2. Installation
+## Installation
 
 Install from PyPI:
 ```bash
@@ -67,46 +70,11 @@ cd JET3
 pip install -e .
 ```
 
-## 3. Usage
-
-```python
-from JET3 import JET
-
-# Initialize JET ensemble processor
-jet = JET()
-
-# Compute ET ensemble with your input data
-results = jet.process(
-    ST=surface_temperature,      # Surface temperature (°C)
-    NDVI=ndvi,                   # Normalized Difference Vegetation Index
-    albedo=albedo,               # Surface albedo
-    Ta=air_temperature,          # Air temperature (°C)
-    RH=relative_humidity,        # Relative humidity (0-1)
-    SM=soil_moisture,            # Soil moisture (m³/m³)
-    Rn=net_radiation,            # Net radiation (W/m²)
-    # ... other required inputs
-)
-
-# Access individual model outputs
-et_ptjplsm = results['PTJPLSMinst']
-et_stic = results['STICJPLdaily']
-et_pmjpl = results['PMJPLdaily']
-et_bess = results['BESSJPLdaily']
-
-# Access ensemble estimate
-et_ensemble = results['ETdaily']
-et_uncertainty = results['ETinstUncertainty']
-
-# Access derived products
-esi = results['ESI']  # Evaporative Stress Index
-wue = results['WUE']  # Water Use Efficiency
-```
-
-## 4. Evapotranspiration Models
+## Evapotranspiration Models
 
 JET3 implements an ensemble of four evapotranspiration models, each with different strengths and theoretical foundations. The ensemble approach combines outputs to reduce uncertainty and improve overall accuracy.
 
-### 4.1. Priestley-Taylor (PT-JPL-SM) Evapotranspiration Model
+### Priestley-Taylor (PT-JPL-SM) Evapotranspiration Model
 
 The Priestley-Taylor Jet Propulsion Laboratory model with Soil Moisture (PT-JPL-SM), developed by Dr. Adam Purdy and Dr. Joshua Fisher, was designed as a soil moisture-sensitive evapotranspiration product for the Soil Moisture Active-Passive (SMAP) mission. The model estimates instantaneous canopy transpiration, leaf surface evaporation, and soil moisture evaporation using the Priestley-Taylor formula with a set of constraints. These three partitions are combined into total latent heat flux in watts per square meter for the ensemble estimate.
 
@@ -114,7 +82,7 @@ The Priestley-Taylor Jet Propulsion Laboratory model with Soil Moisture (PT-JPL-
 
 **Repository**: [PT-JPL-SM](https://github.com/JPL-Evapotranspiration-Algorithms/PT-JPL-SM)
 
-### 4.2. Surface Temperature Initiated Closure (STIC-JPL) Evapotranspiration Model
+### Surface Temperature Initiated Closure (STIC-JPL) Evapotranspiration Model
 
 The Surface Temperature Initiated Closure-Jet Propulsion Laboratory (STIC-JPL) model, contributed by Dr. Kaniska Mallick, was designed as a surface temperature-sensitive ET model, adopted by ECOSTRESS and SBG for improved estimates of ET reflecting mid-day heat stress. The STIC-JPL model estimates total latent heat flux directly using thermal remote sensing observations. This instantaneous estimate of latent heat flux is included in the ensemble estimate.
 
@@ -122,7 +90,7 @@ The Surface Temperature Initiated Closure-Jet Propulsion Laboratory (STIC-JPL) m
 
 **Repository**: [STIC-JPL](https://github.com/JPL-Evapotranspiration-Algorithms/STIC-JPL)
 
-### 4.3. Penman Monteith (PM-JPL) Evapotranspiration Model
+### Penman Monteith (PM-JPL) Evapotranspiration Model
 
 The Penman-Monteith-Jet Propulsion Laboratory (PM-JPL) algorithm is a derivation of the MOD16 algorithm that was originally designed as the ET product for the Moderate Resolution Imaging Spectroradiometer (MODIS) and continued as a Visible Infrared Imaging Radiometer Suite (VIIRS) product. PM-JPL uses a similar approach to PT-JPL and PT-JPL-SM to independently estimate vegetation and soil components of instantaneous ET, but using the Penman-Monteith formula instead of the Priestley-Taylor. The PM-JPL latent heat flux partitions are summed to total latent heat flux for the ensemble estimate.
 
@@ -130,7 +98,7 @@ The Penman-Monteith-Jet Propulsion Laboratory (PM-JPL) algorithm is a derivation
 
 **Repository**: [PM-JPL](https://github.com/JPL-Evapotranspiration-Algorithms/PM-JPL)
 
-### 4.4. Breathing Earth System Simulator (BESS-JPL) Gross Primary Production (GPP) Model
+### Breathing Earth System Simulator (BESS-JPL) Gross Primary Production (GPP) Model
 
 The Breathing Earth System Simulator Jet Propulsion Laboratory (BESS-JPL) model is a coupled surface energy balance and photosynthesis model contributed by Dr. Youngryel Ryu. The model iteratively calculates net radiation, ET, and Gross Primary Production (GPP) estimates. The latent heat flux component of BESS-JPL is included in the ensemble estimate, while the BESS-JPL net radiation is used as input to the other ET models.
 
@@ -138,11 +106,11 @@ The Breathing Earth System Simulator Jet Propulsion Laboratory (BESS-JPL) model 
 
 **Repository**: [BESS-JPL](https://github.com/JPL-Evapotranspiration-Algorithms/BESS-JPL)
 
-### 4.5. Ensemble Processing
+### Ensemble Processing
 
 The ensemble ET estimate is computed as the median of total latent heat flux (in watts per square meter) from the PT-JPL-SM, STIC-JPL, PM-JPL, and BESS-JPL models. This median is then upscaled to a daily ET estimate in millimeters per day. The standard deviation between these multiple estimates represents the ensemble uncertainty.
 
-### 4.6. AquaSEBS Water Surface Evaporation
+### AquaSEBS Water Surface Evaporation
 
 For water surface pixels, JET3 implements the AquaSEBS (Aquatic Surface Energy Balance System) model developed by Abdelrady et al. (2016) and validated by Fisher et al. (2023). Water surface evaporation is calculated using a physics-based approach that combines the equilibrium temperature model for water heat flux with the Priestley-Taylor equation for evaporation estimation.
 
@@ -187,9 +155,9 @@ The AquaSEBS methodology has been extensively validated against 19 in situ open 
 
 The model demonstrates particular strength in water-limited environments and performs well across spatial scales from 30m (Landsat) to 1km (MODIS) resolution.
 
-Water surface evaporation estimates are included in the `ETdaily` layer in mm per day, integrated over the daylight period from sunrise to sunset.
+Water surface evaporation estimates are included in the `ET_daylight_kg` output layer (equivalent to mm over daylight), integrated from sunrise to sunset.
 
-### 4.7. Evaporative Stress Index (ESI) and Water Use Efficiency (WUE)
+### Evaporative Stress Index (ESI) and Water Use Efficiency (WUE)
 
 The PT-JPL-SM model generates estimates of both actual and potential instantaneous ET. The potential evapotranspiration (PET) estimate represents the maximum expected ET if there were no water stress to plants on the ground. The ratio of the actual ET estimate to the PET estimate forms an index representing the water stress of plants, with zero being fully stressed with no observable ET and one being non-stressed with ET reaching PET.
 
@@ -203,7 +171,7 @@ $$\text{WUE} = \frac{\text{GPP}}{\text{Transpiration}}$$
 
 WUE is expressed as the ratio of grams of carbon that plants take in to kilograms of water that plants release ($\text{g C kg}^{-1} \text{H}_2\text{O}$).
 
-## 5. Theory
+## Theory
 
 The JPL evapotranspiration (JET) ensemble provides a robust estimation of ET from multiple ET models. The ET ensemble incorporates ET data from four algorithms: Priestley Taylor-Jet Propulsion Laboratory model with soil moisture (PT-JPL-SM), the Penman Monteith-Jet Propulsion Laboratory model (PM-JPL), Surface Temperature Initiated Closure-Jet Propulsion Laboratory model (STIC-JPL), and the Breathing Earth System Simulator-Jet Propulsion Laboratory model (BESS-JPL). 
 
@@ -215,7 +183,7 @@ Each model brings complementary strengths:
 
 The ensemble median approach reduces model-specific biases and provides more robust estimates than any individual model.
 
-## 6. Validation
+## Validation
 
 The JET ensemble approach has been validated against flux tower measurements from the FLUXNET network as documented in Pierrat et al. (2025) and through the ECOSTRESS mission. The validation demonstrated that the ensemble evapotranspiration estimates:
 
@@ -236,7 +204,7 @@ The validation results indicate varying performance across different ecosystem t
 
 The JET3 ensemble provides reliable ET estimates suitable for water resource management, agricultural monitoring, and ecosystem research applications.
 
-## 7. Acknowledgements 
+## Acknowledgements 
 
 We would like to thank Joshua Fisher as the initial science lead of the ECOSTRESS mission and PI of the ROSES project to develop the JET ensemble approach.
 
@@ -246,7 +214,7 @@ We would like to thank Kaniska Mallick for contributing the STIC model.
 
 We would like to thank Youngryel Ryu for contributing the BESS-JPL model.
 
-## 8. References
+## References
 
 - Abdelrady, A., Timmermans, J., Vekerdy, Z., Salama, M.S. (2016). Surface Energy Balance of Fresh and Saline Waters: AquaSEBS. *Remote Sensing*, 8, 583. https://doi.org/10.3390/rs8070583
 - Allen, R.G., Tasumi, M., & Trezza, R. (2007). "Satellite-based energy balance for mapping evapotranspiration with internalized calibration (METRIC)—Model." *Journal of Irrigation and Drainage Engineering*, 133(4), 380-394. https://doi.org/10.1061/(ASCE)0733-9437(2007)133:4(380)
