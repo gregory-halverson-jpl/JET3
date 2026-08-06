@@ -18,6 +18,7 @@ dependencies = [
     "AquaSEBS",
     "BESS-JPL",
     "check-distribution",
+    "ECOv002-calval-tables>=1.13.0",
     "FLiESANN",
     "GEOS5FP",
     "MODISCI",
