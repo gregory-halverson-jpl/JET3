@@ -6,9 +6,10 @@ import pandas as pd
 import rasters as rt
 import sklearn
 from check_distribution import check_distribution
-from GEOS5FP import GEOS5FP
+from GEOS5FP import GEOS5FPConnection
 from rasters import Raster, RasterGeometry
 
+from .constants import *
 from .exceptions import BlankOutputError
 
 logger = logging.getLogger(__name__)
@@ -21,10 +22,9 @@ def sharpen_meteorology_data(
     geometry: RasterGeometry,
     coarse_geometry: RasterGeometry,
     time_UTC: datetime,
-    date_UTC: date,
-    upsampling: str,
-    downsampling: str,
-    GEOS5FP_connection: GEOS5FP,
+    upsampling: str = UPSAMPLING,
+    downsampling: str = DOWNSAMPLING,
+    GEOS5FP_connection: GEOS5FPConnection = None,
 ) -> tuple[Raster, Raster, Raster]:
     """
     Sharpens air temperature and relative humidity using a linear regression model.
@@ -36,7 +36,6 @@ def sharpen_meteorology_data(
         geometry: Fine-resolution raster geometry.
         coarse_geometry: Coarse-resolution raster geometry.
         time_UTC: UTC timestamp of the overpass.
-        date_UTC: UTC date of the overpass.
         upsampling: Upsampling method for spatial resampling.
         downsampling: Downsampling method for spatial resampling.
         GEOS5FP_connection: An instance of the GEOS5FP connection.
@@ -50,6 +49,9 @@ def sharpen_meteorology_data(
     Raises:
         BlankOutput: If the sharpened air temperature or humidity output is blank.
     """
+    if GEOS5FP_connection is None:
+        GEOS5FP_connection = GEOS5FPConnection()
+
     ST_C_coarse = ST_C.to_geometry(coarse_geometry, resampling=upsampling)
     check_distribution(ST_C_coarse, "ST_C_coarse")
     NDVI_coarse = NDVI.to_geometry(coarse_geometry, resampling=upsampling)

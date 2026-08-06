@@ -10,6 +10,7 @@ import posixpath
 import warnings
 from datetime import datetime
 from typing import Union, Dict
+
 import numpy as np
 import rasters as rt
 from rasters import Raster, RasterGeometry
@@ -40,6 +41,8 @@ from .generate_RH_uncalibrated_UQ import generate_RH_uncalibrated_UQ
 from .generate_SM_calibrated_UQ import generate_SM_calibrated_UQ
 from .generate_Ta_C_calibrated_UQ import generate_Ta_C_calibrated_UQ
 from .generate_RH_calibrated_UQ import generate_RH_calibrated_UQ
+from .sharpen_soil_moisture_data import sharpen_soil_moisture_data
+from .sharpen_meteorology_data import sharpen_meteorology_data
 
 logger = logging.getLogger(__name__)
 
@@ -96,14 +99,16 @@ def JET(
         soil_grids_directory: str = None,
         GEDI_directory: str = None,
         Rn_model_name: str = None,
-        downsampling: str = None,
         GEOS5FP_connection: GEOS5FPConnection = None,
         water_mask: Union[Raster, np.ndarray, bool] = None,
+        upsampling: str = UPSAMPLING,
+        downsampling: str = DOWNSAMPLING,
         offline_mode: bool = False,
         include_water_surface: bool = True,
         generate_UQ: bool = False,
         use_calibration: bool = False,
-        sharpen_soil_moisture: bool = SHARPEN_SOIL_MOISTURE) -> Dict[str, Union[Raster, np.ndarray]]:
+        sharpen_soil_moisture: bool = SHARPEN_SOIL_MOISTURE,
+        sharpen_meteorology: bool = SHARPEN_METEOROLOGY):
     """
     Main science function for JET (JPL Evapotranspiration Ensemble).
     
@@ -195,15 +200,55 @@ def JET(
             raise MissingOfflineParameter(f"in offline mode, the following parameters must be provided: {', '.join(offline_vars)}")
     
     processing_as_raster = isinstance(ST_C, Raster)
+    coarse_geometry = None
+    Ta_C_smooth = Ta_C
     
     # Create GEOS5FP connection if not provided
     if GEOS5FP_connection is None:
         GEOS5FP_connection = GEOS5FPConnection()
     
+    # Retrieve meteorological variables only when they were not supplied.
+    if Ta_C is None or RH is None:
+        # Sharpen meteorological variables if enabled and both variables are missing.
+        if sharpen_meteorology and processing_as_raster and Ta_C is None and RH is None:
+            try:
+                # Create coarse geometry
+                coarse_geometry = geometry.rescale(GEOS_IN_SENTINEL_COARSE_CELL_SIZE)
+
+                Ta_C, RH, Ta_C_smooth = sharpen_meteorology_data(
+                    ST_C=ST_C,
+                    NDVI=NDVI,
+                    albedo=albedo,
+                    geometry=geometry,
+                    coarse_geometry=coarse_geometry,
+                    time_UTC=time_UTC,
+                    upsampling=upsampling,
+                    downsampling=downsampling,
+                    GEOS5FP_connection=GEOS5FP_connection
+                )
+            except Exception as e:
+                logger.error(e)
+                logger.warning("unable to sharpen meteorology")
+                if Ta_C is None:
+                    Ta_C = GEOS5FP_connection.Ta_C(time_UTC=time_UTC, geometry=geometry, resampling=downsampling)
+                    Ta_C_smooth = Ta_C
+                if RH is None:
+                    RH = GEOS5FP_connection.RH(time_UTC=time_UTC, geometry=geometry, resampling=downsampling)
+        else:
+            if Ta_C is None:
+                Ta_C = GEOS5FP_connection.Ta_C(time_UTC=time_UTC, geometry=geometry, resampling=downsampling)
+                Ta_C_smooth = Ta_C
+            if RH is None:
+                RH = GEOS5FP_connection.RH(time_UTC=time_UTC, geometry=geometry, resampling=downsampling)
+
     # Sharpen soil moisture if enabled
     if soil_moisture is None:
-        if sharpen_soil_moisture:
+        if sharpen_soil_moisture and processing_as_raster:
             try:
+                if coarse_geometry is None:
+                    # Create coarse geometry
+                    coarse_geometry = geometry.rescale(GEOS_IN_SENTINEL_COARSE_CELL_SIZE)
+                    
                 soil_moisture = sharpen_soil_moisture_data(
                     ST_C=ST_C,
                     NDVI=NDVI,
@@ -212,10 +257,6 @@ def JET(
                     geometry=geometry,
                     coarse_geometry=coarse_geometry,
                     time_UTC=time_UTC,
-                    date_UTC=date_UTC,
-                    tile=tile,
-                    orbit=orbit,
-                    scene=scene,
                     upsampling=upsampling,
                     downsampling=downsampling,
                     GEOS5FP_connection=GEOS5FP_connection
